@@ -148,7 +148,7 @@ async function buildRecommendations(user: UserProfile, intent: SchedulingIntent)
   const durationBlocks = Math.max(Math.ceil(intent.durationMinutes / 30), 1)
   const window = getDateWindow(intent.datePreference, intent.specificDate)
   const urgencyLevel = URGENCY_LEVEL[intent.urgency]
-  const recommendations: RecommendationOption[] = []
+  const recommendationsMap = new Map<string, RecommendationOption>()
 
   for (const slot of activeUserSlots) {
     if (!isWithinDateRange(slot.date, window.start, window.end)) {
@@ -158,6 +158,7 @@ async function buildRecommendations(user: UserProfile, intent: SchedulingIntent)
       continue
     }
 
+    const slotKey = `${slot.date}|${slot.startTime}`
     const endTime = addMinutes(slot.startTime, intent.durationMinutes)
     const participantScores: number[] = []
     const participantFocus: number[] = []
@@ -207,8 +208,8 @@ async function buildRecommendations(user: UserProfile, intent: SchedulingIntent)
       timePreference: intent.timePreference,
     })
 
-    recommendations.push({
-      slotKey: `${slot.date}|${slot.startTime}`,
+    recommendationsMap.set(slotKey, {
+      slotKey,
       date: slot.date,
       startTime: slot.startTime,
       endTime,
@@ -221,6 +222,7 @@ async function buildRecommendations(user: UserProfile, intent: SchedulingIntent)
     })
   }
 
+  const recommendations = Array.from(recommendationsMap.values())
   const sorted = recommendations.sort((left, right) => right.score - left.score)
   const fullyAvailable = sorted.filter((option) => option.participantAvailability === 1)
   return (fullyAvailable.length > 0 ? fullyAvailable : sorted).slice(0, 5)
