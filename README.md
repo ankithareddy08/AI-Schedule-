@@ -1,1011 +1,584 @@
-# AI Schedule - AI-Powered Meeting Scheduler
+# Aura Sync — AI-Powered Meeting Scheduler
 
-<div align="center">
-
-**An intelligent meeting assistant that uses LLM for intent parsing and ML for scheduling decisions.**
-
-![Status](https://img.shields.io/badge/Status-Production--Ready-brightgreen)
-![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
-![Next.js](https://img.shields.io/badge/Next.js-14-black)
-![React Native](https://img.shields.io/badge/React%20Native-0.73-blue)
-
-</div>
+An intelligent scheduling assistant that uses **Gemini 2.5 Flash** for natural language intent parsing and a **trained logistic regression ML model** for slot ranking. Available as a Next.js web app and a React Native Android app.
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
-- [Overview](#overview)
-- [Tech Stack](#tech-stack)
-- [Features](#features)
-- [Project Structure](#project-structure)
-- [Quick Start](#quick-start)
-- [Detailed Setup](#detailed-setup)
-- [Workflow & Architecture](#workflow--architecture)
-- [API Endpoints](#api-endpoints)
-- [How to Use](#how-to-use)
-- [Dataset Explanation](#dataset-explanation)
-- [ML Model Details](#ml-model-details)
-- [Troubleshooting](#troubleshooting)
-- [Known Limitations](#known-limitations)
-
----
-
-## 🎯 Overview
-
-AI Schedule is a meeting assistant prototype that:
-
-1. **Accepts natural language meeting requests** → "Schedule a 1-hour team sync this week"
-2. **Parses intent with LLM** → Extracts duration, participants, urgency, constraints
-3. **Ranks slots with trained ML model** → Uses 14+ engineered features to score availability
-4. **Resolves conflicts intelligently** → Recommends which meeting should move
-5. **Requires human confirmation** → Shows top option + alternatives with ML scores
-6. **Provides explanations** → Why each slot was ranked
-
-**Key Constraint:** The LLM is restricted to intent parsing ONLY. All scheduling decisions (ranking, conflict resolution) are driven by the trained ML model at runtime.
+1. [How It Works](#how-it-works)
+2. [Tech Stack](#tech-stack)
+3. [Project Structure](#project-structure)
+4. [Prerequisites](#prerequisites)
+5. [Web App Setup & Commands](#web-app-setup--commands)
+6. [Android App Setup & Commands](#android-app-setup--commands)
+7. [Environment Variables](#environment-variables)
+8. [API Endpoints](#api-endpoints)
+9. [ML Model](#ml-model)
+10. [Workflow Diagram](#workflow-diagram)
+11. [Test Prompts](#test-prompts)
+12. [Troubleshooting](#troubleshooting)
 
 ---
 
-## 🛠 Tech Stack
-
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **Backend API** | Next.js 14 (TypeScript) | REST API for scheduling, inference |
-| **ML Training** | Python 3.9+, scikit-learn, pandas | Logistic regression model training |
-| **Frontend Web** | Next.js + React | Web UI (desktop dashboard) |
-| **Frontend Mobile** | React Native (Expo) | Mobile app (iOS/Android) |
-| **Data Layer** | CSV + JSON | Synthetic dataset (users, events, slots) |
-| **Model Artifact** | JSON weights | Trained model exported for runtime |
-
----
-
-## ✨ Features
-
-- ✅ **Dataset-backed user login** - Load calendar & preferences from CSV
-- ✅ **Chat-based NLP input** - Natural language scheduling requests
-- ✅ **LLM intent parsing** - OpenAI-compatible (with deterministic fallback)
-- ✅ **ML-powered ranking** - Logistic regression with 90%+ accuracy
-- ✅ **Conflict detection** - Identifies overlapping meetings
-- ✅ **Conflict resolution** - Recommends which meeting to reschedule
-- ✅ **ML scoring** - Every recommendation includes the model's confidence
-- ✅ **Human approval** - Confirmation required before any action
-- ✅ **Alternative options** - Shows top 3 slots ranked by ML score
-- ✅ **Calendar view** - Visual display of user events
-- ✅ **Mobile UI** - Glassmorphism design with neon accents
-
----
-
-## 📁 Project Structure
+## How It Works
 
 ```
-AI-Schedule/
+User types:  "Schedule a 1-hour team sync this Friday afternoon"
+                │
+                ▼
+     ┌─────────────────────┐
+     │  Gemini 2.5 Flash   │  ← parses intent only (no scheduling)
+     │  Intent Parser      │
+     └──────────┬──────────┘
+                │  { action, durationMinutes, urgency,
+                │    timePreference, datePreference,
+                │    hardConstraints, participants }
+                ▼
+     ┌─────────────────────┐
+     │  Feature Builder    │  ← loads calendar_events.csv +
+     │                     │    user_profiles.json
+     └──────────┬──────────┘
+                │  19 engineered features per candidate slot
+                ▼
+     ┌─────────────────────┐
+     │  Logistic Regression│  ← uses model-artifact.json weights
+     │  ML Ranker          │    (trained offline, runs at runtime)
+     └──────────┬──────────┘
+                │  Ranked recommendations with scores + explanations
+                ▼
+     ┌─────────────────────┐
+     │  Human Confirmation │  ← no calendar mutation until user confirms
+     └─────────────────────┘
+```
+
+**Key constraint:** The LLM only parses intent. All scheduling decisions are made by the trained ML model.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Web frontend + API | Next.js 16.2, React 19.2, TypeScript 5.7 |
+| Styling | Tailwind CSS 4.2 with custom design system |
+| Android app | React Native 0.85.2 (bare CLI, not Expo) |
+| LLM | Gemini 2.5 Flash (REST) with regex fallback |
+| ML model | Logistic regression, trained with NumPy (no runtime deps) |
+| Dataset | CSV + JSON (synthetic, 8 users × 2 weeks) |
+
+---
+
+## Project Structure
+
+```
+AI Schedule/
+├── assets/                          # Shared image assets
+│   └── App_logo2.jpg                # App logo (used in web + mobile)
 │
-├── dataset/                          # Synthetic data (3 files)
-│   ├── calendar_events.csv           # 2 weeks of events per user
-│   ├── time_slots.csv                # 30-min slots with features + labels
-│   ├── user_profiles.json            # User preferences & behavior
-│   └── generate_dataset.py           # [Optional] Generate more data
+├── dataset/                         # Synthetic training data
+│   ├── calendar_events.csv          # User calendar events (2 weeks)
+│   ├── time_slots.csv               # 30-min slots with ML labels
+│   └── user_profiles.json           # User preferences & behavior
 │
-├── frontend/                         # Next.js web app + backend
+├── frontend/                        # Next.js web app + API backend
 │   ├── app/
-│   │   ├── page.tsx                  # Main dashboard
-│   │   ├── layout.tsx                # Root layout
+│   │   ├── page.tsx                 # Entry point (renders AuraSync)
+│   │   ├── globals.css              # Design system (mobile-matched tokens)
 │   │   └── api/
-│   │       ├── users/route.ts        # GET /api/users → Load user data
-│   │       └── schedule/route.ts     # POST /api/schedule → Get recommendations
+│   │       ├── users/route.ts       # GET /api/users
+│   │       ├── schedule/route.ts    # POST /api/schedule
+│   │       └── events/route.ts      # GET /api/events?userId=X
 │   ├── components/
-│   │   ├── chat/
-│   │   ├── calendar/
-│   │   ├── recommendations/
-│   │   └── ...
+│   │   └── aura-sync/
+│   │       ├── aura-sync.tsx        # Main shell (layout, state, nav)
+│   │       ├── login-screen.tsx     # Profile selector
+│   │       ├── chat-screen.tsx      # Chat UI + intent card
+│   │       ├── calendar-screen.tsx  # Events + ML signals
+│   │       └── recommendation-sheet.tsx  # Bottom sheet with ranked slots
 │   ├── lib/
-│   │   ├── model-artifact.json       # ⭐ Trained model weights (generated)
-│   │   ├── server/
-│   │   │   ├── intent.ts             # LLM parsing + fallback
-│   │   │   ├── scheduler.ts          # ML scoring + ranking
-│   │   │   ├── features.ts           # Feature engineering
-│   │   │   └── data-loader.ts        # Load CSV/JSON
-│   │   └── types.ts                  # TypeScript types
+│   │   ├── model-artifact.json      # Trained model weights (generated)
+│   │   ├── types.ts                 # Shared TypeScript types
+│   │   └── server/
+│   │       ├── intent.ts            # Gemini parsing + regex fallback
+│   │       ├── scheduler.ts         # Orchestrates ranking pipeline
+│   │       ├── runtime-model.ts     # Loads artifact, scores slots
+│   │       ├── features.ts          # Feature engineering (19 features)
+│   │       └── data-loader.ts       # Reads CSV / JSON dataset files
+│   ├── public/
+│   │   └── app-logo.jpg             # Logo served to web
 │   ├── scripts/
-│   │   └── train_model.py            # 🔧 Train ML model (generates artifact)
-│   ├── package.json                  # Dependencies
-│   ├── tsconfig.json
-│   ├── .env.example                  # Environment template
-│   └── .env.local                    # [Create this] Your secrets
-│
-├── mobile/                           # React Native (Expo) mobile app
-│   ├── App.tsx                       # Main mobile component
-│   ├── assets/                       # Images (arrow-right.png, etc.)
-│   ├── data.ts                       # Import dataset for mobile
-│   ├── app.json                      # Expo config
+│   │   └── train_model.py           # Trains ML model, writes artifact
+│   ├── .env.local                   # Secrets (not committed)
 │   └── package.json
 │
-└── README.md                         # This file
+└── mobile/                          # React Native Android app
+    ├── App.tsx                      # Entire app (login, chat, calendar)
+    ├── assets/
+    │   └── app-logo.jpg             # Logo for mobile
+    ├── android/
+    │   └── app/build.gradle         # usesCleartextTraffic config
+    └── package.json
 ```
 
 ---
 
-## 🚀 Quick Start
+## Prerequisites
 
-### Prerequisites
+**For the web app:**
+- Node.js 18+
+- npm or pnpm
+- Python 3.9+ (only needed once, to train the ML model)
+- Python packages: `numpy pandas scikit-learn` → `pip install numpy pandas scikit-learn`
 
-- **Node.js** 16+ (for frontend)
-- **Python** 3.9+ (for training)
-- **npm** or **yarn** (package manager)
-
-### 1️⃣ Clone & Enter Directory
-
-```bash
-git clone https://github.com/ankithareddy08/AI-Schedule-.git
-cd "AI Schedule"
-```
-
-### 2️⃣ Setup & Run Backend
-
-```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Train the ML model (generates model-artifact.json)
-npm run train:model
-
-# Start development server
-npm run dev
-```
-
-The backend API will run at: `http://localhost:3000`
-
-### 3️⃣ Setup & Run Mobile App (Optional)
-
-```bash
-cd ../mobile
-
-# Install dependencies
-npm install
-
-# Start Expo development server
-npm start
-
-# Scan QR code with Expo Go app or press 'a' for Android emulator
-```
+**For the Android app (additional):**
+- Android Studio with an emulator, OR a physical Android device on the same Wi-Fi
+- Java 17+ (JDK)
+- Android SDK (set `ANDROID_HOME`)
+- React Native CLI: `npm install -g react-native-cli`
 
 ---
 
-## 🔧 Detailed Setup
+## Web App Setup & Commands
 
-### Backend Setup (Next.js)
-
-#### Step 1: Install Dependencies
+### Step 1 — Install dependencies
 
 ```bash
 cd frontend
 npm install
 ```
 
-**Key packages installed:**
-- `next` - React framework
-- `typescript` - Type safety
-- `react` - UI library
+### Step 2 — Train the ML model
 
-**Python packages (for ML training only):**
-- `scikit-learn` - ML model training
-- `pandas`, `numpy` - Data processing
-
-#### Step 2: Train the ML Model
+This only needs to be done once (or after changing the dataset).
 
 ```bash
+# From the frontend/ directory:
 npm run train:model
 ```
 
-**What this does:**
-- Runs `frontend/scripts/train_model.py`
-- Reads `dataset/time_slots.csv` and `dataset/user_profiles.json`
-- Trains logistic regression model
-- Exports weights to `frontend/lib/model-artifact.json`
-- Displays accuracy: ~90%
+This runs `scripts/train_model.py`, reads the CSV/JSON from `../dataset/`, trains a logistic regression model, and writes weights to `lib/model-artifact.json`.
 
-**Output:**
+Expected output:
 ```
 Training complete!
-Accuracy: 90.16%
-Precision: 69.97%
-Recall: 100%
-Model artifact saved to: frontend/lib/model-artifact.json
+Accuracy:      90.16%
+Precision:     69.97%
+Recall:       100.00%
+Positive rate: 22.93%
+Model artifact saved to: lib/model-artifact.json
 ```
 
-#### Step 3: Configure Environment (Optional)
+### Step 3 — Add Gemini API key
 
-If you want to use a real LLM for intent parsing:
-
-```bash
-# Copy template
-cp .env.example .env.local
-
-# Edit .env.local and add:
-INTENT_LLM_ENDPOINT=https://api.openai.com/v1/chat/completions
-INTENT_LLM_MODEL=gpt-4
-INTENT_LLM_API_KEY=sk-your-api-key-here
+Create `frontend/.env.local`:
+```
+GEMINI_API_KEY=AIzaSyBtDkLPduflnWoKNWPwoPUGTMu3NkQJswQ
 ```
 
-Without these variables, the fallback parser handles requests automatically.
+Without this, the app falls back to a regex-based parser automatically.
 
-#### Step 4: Start Development Server
+### Step 4 — Start the dev server
 
 ```bash
+# From the frontend/ directory:
 npm run dev
 ```
 
-**Server output:**
-```
-ready - started server on 0.0.0.0:3000, url: http://localhost:3000
-```
+Server starts at: **http://localhost:3000**
 
-Visit: `http://localhost:3000`
+### Other useful commands
+
+```bash
+npm run build          # Production build
+npm run start          # Serve production build (after build)
+npm run lint           # Run ESLint
+npm run train:model    # Retrain ML model (re-run after dataset changes)
+```
 
 ---
 
-### Mobile Setup (React Native)
+## Android App Setup & Commands
 
-#### Step 1: Install Dependencies
+> The mobile app calls the Next.js backend over HTTP. The backend must be running before launching the app.
+
+### Step 1 — Set your machine's local IP
+
+Find your IP:
+```bash
+# Windows
+ipconfig
+# Look for: IPv4 Address . . . . . . : 192.168.x.x
+
+# macOS/Linux
+ifconfig | grep "inet "
+```
+
+Open `mobile/App.tsx` and update line 24:
+```typescript
+const API_BASE = 'http://YOUR_IP_HERE:3000';
+// Example: const API_BASE = 'http://192.168.29.154:3000';
+```
+
+> For Android emulator only (not physical device): use `http://10.0.2.2:3000`
+
+### Step 2 — Install dependencies
 
 ```bash
 cd mobile
 npm install
 ```
 
-#### Step 2: Import Dataset
+### Step 3 — Start Metro bundler
 
-Ensure `mobile/data.ts` imports CSV data:
-
-```typescript
-import { USERS_DATA, CALENDAR_EVENTS, TIME_SLOTS } from './data';
+Open a new terminal:
+```bash
+cd mobile
+npx react-native start --port 8081
 ```
 
-#### Step 3: Start Expo Server
+Keep this running while you build.
 
+### Step 4 — Build and install on Android
+
+Open another terminal:
 ```bash
-npm start
+cd mobile/android
+.\gradlew.bat app:installDebug
 ```
 
-#### Step 4: Run on Device/Emulator
+> On macOS/Linux: `./gradlew app:installDebug`
+
+This builds the APK and installs it on the connected device/emulator. The app will open automatically.
+
+### Rebuild after code changes
+
+Metro (Step 3) hot-reloads most JS changes instantly. For native config changes (like `build.gradle`), re-run Step 4.
 
 ```bash
-# Option A: Android Emulator
-Press 'a'
-
-# Option B: iOS Simulator
-Press 'i'
-
-# Option C: Scan QR with Expo Go
-Scan with any mobile device
+# Full clean rebuild if needed:
+cd mobile/android
+.\gradlew.bat clean
+.\gradlew.bat app:installDebug
 ```
 
 ---
 
-## 🏗 Workflow & Architecture
+## Environment Variables
 
-### Data Flow
+File: `frontend/.env.local`
 
-```
-User Input (Chat)
-    ↓
-┌─────────────────────────────────┐
-│  Step 1: Intent Parsing         │
-│  (LLM or Fallback)              │
-│  ├─ Duration                    │
-│  ├─ Participants                │
-│  ├─ Urgency                     │
-│  └─ Constraints                 │
-└──────────┬──────────────────────┘
-           ↓
-┌─────────────────────────────────┐
-│  Step 2: Feature Engineering    │
-│  (Load CSV + Augment)           │
-│  ├─ Base features (6)           │
-│  ├─ Augmented features (8)      │
-│  └─ User preferences            │
-└──────────┬──────────────────────┘
-           ↓
-┌─────────────────────────────────┐
-│  Step 3: ML Ranking             │
-│  (Logistic Regression)          │
-│  ├─ Score each available slot   │
-│  ├─ Rank by score               │
-│  └─ Pick top 3 + fallbacks      │
-└──────────┬──────────────────────┘
-           ↓
-┌─────────────────────────────────┐
-│  Step 4: Conflict Detection     │
-│  ├─ Check overlaps              │
-│  ├─ Score current placement     │
-│  └─ Recommend reschedule        │
-└──────────┬──────────────────────┘
-           ↓
-┌─────────────────────────────────┐
-│  Step 5: User Confirmation      │
-│  (Human-in-the-loop)            │
-│  ├─ Show recommendation + score │
-│  ├─ Show alternatives           │
-│  ├─ Explain why (feature names) │
-│  └─ Wait for approval           │
-└──────────┬──────────────────────┘
-           ↓
-Confirmed Meeting (logged)
-```
-
-### System Architecture Diagram
-
-```mermaid
-flowchart LR
-    A["Chat UI"] --> B["Intent Parser<br/>(LLM + Fallback)"]
-    B --> C["Structured Request<br/>(duration, urgency...)"]
-    C --> D["Runtime Feature Builder<br/>(load CSV + augment)"]
-    D --> E["Trained ML Ranker<br/>(logistic regression)"]
-    E --> F["Top Recommendation<br/>+ Alternatives"]
-    D --> G["Conflict Resolver<br/>(compare scores)"]
-    G --> H["Reschedule Recommendation"]
-    F --> I["User Confirmation Modal"]
-    H --> I
-    J["📊 calendar_events.csv"] --> D
-    K["📊 time_slots.csv"] --> D
-    L["📊 user_profiles.json"] --> D
-    K --> M["train_model.py"]
-    L --> M
-    M --> N["✅ model-artifact.json"]
-    N --> E
-    N --> G
-    style E fill:#4CAF50,color:#fff
-    style G fill:#4CAF50,color:#fff
-    style N fill:#FFD700,color:#000
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GEMINI_API_KEY` | Optional | Gemini 2.5 Flash key for LLM intent parsing. Without it, regex fallback is used. |
 
 ---
 
-## 🔌 API Endpoints
+## API Endpoints
 
-### 1. `POST /api/schedule`
+All endpoints served by the Next.js backend at `http://localhost:3000`.
 
-**Schedule a meeting or resolve conflicts**
+### `GET /api/users`
 
-**Request:**
-```json
-{
-  "userId": 1,
-  "prompt": "Schedule a 1-hour team sync this week"
-}
-```
+Returns all users from the dataset.
 
-**Response:**
-```json
-{
-  "intent": {
-    "duration": 60,
-    "urgency": "normal",
-    "participants": [],
-    "constraints": []
-  },
-  "recommendations": [
-    {
-      "slotId": 42,
-      "time": "2024-04-22 10:00",
-      "date": "2024-04-22",
-      "score": 0.87,
-      "explanation": "High focus score, preferred time window"
-    },
-    {
-      "slotId": 43,
-      "time": "2024-04-22 10:30",
-      "score": 0.81,
-      "explanation": "Good availability, slight meeting load"
-    }
-  ],
-  "conflicts": []
-}
-```
-
-### 2. `GET /api/users`
-
-**Load user login options**
-
-**Response:**
 ```json
 {
   "users": [
     {
-      "id": 1,
-      "name": "Alice Johnson",
-      "email": "alice@company.com"
-    },
-    {
-      "id": 2,
-      "name": "Bob Smith",
-      "email": "bob@company.com"
+      "userId": 1,
+      "name": "Alice Chen",
+      "email": "alice@company.com",
+      "preferredTime": "morning",
+      "avgMeetingsPerDay": 2.5,
+      "preferredDuration": 30,
+      "doNotDisturbStart": "18:00",
+      "doNotDisturbEnd": "09:00"
     }
   ]
 }
 ```
 
----
+### `GET /api/events?userId=1`
 
-## 💻 How to Use
+Returns calendar events for a user (loaded on login in mobile).
 
-### Web Application (`http://localhost:3000`)
-
-#### Login
-1. Click "Quick Login" → Select a user from the dataset
-2. Alternatively, enter email + password for manual login
-
-#### Schedule a Meeting
-1. Navigate to **Chat** tab
-2. Type: `"Schedule a 30-minute 1-on-1 tomorrow morning"`
-3. View **Intent Parsing** summary (extracted duration, urgency)
-4. Review **Top Recommendations** (sorted by ML score)
-5. Click **"Confirm & Schedule"** to approve
-
-#### Resolve Conflicts
-1. Type: `"I have two overlapping meetings tomorrow"`
-2. System analyzes both meetings using ML scorer
-3. Recommends which one should move
-4. Confirm the reschedule
-
-#### View Calendar
-1. Click **Calendar** tab
-2. See all events for logged-in user
-3. View meeting types, times, durations
-
-### Mobile Application (React Native)
-
-#### Login
-1. Tap **"Login as [User]"**
-2. Lands on **Chat Screen**
-
-#### Send Message
-1. Type in input box: `"Find 30 min for meeting"`
-2. Tap **Send** (arrow-up icon)
-3. View **Top Recommendations** modal
-4. Select slot → Confirm
-
-#### View Calendar
-1. Tap **Calendar** tab
-2. Browse events by date/time
-
----
-
-## 📊 Dataset Explanation
-
-### 1. `dataset/calendar_events.csv`
-
-**Purpose:** Historical calendar data per user
-
-| Column | Example | Usage |
-|--------|---------|-------|
-| `event_id` | 1 | Unique identifier |
-| `user_id` | 1 | User reference |
-| `title` | "Team Sync" | Event name |
-| `start_time` | "10:00" | Start time (HH:MM) |
-| `duration_minutes` | 60 | Meeting length |
-| `date` | "2024-04-22" | Event date |
-| `meeting_type` | "STANDUP" | Type (STANDUP, 1-ON-1, etc.) |
-
-**How it's used:**
-- Populate calendar view
-- Detect conflicts (overlapping times)
-- Calculate daily meeting load
-- Extract user behavior patterns
-
-### 2. `dataset/time_slots.csv`
-
-**Purpose:** Training data for ML model (30-minute slots with labels)
-
-| Column | Example | Usage |
-|--------|---------|-------|
-| `user_id` | 1 | User reference |
-| `date` | "2024-04-22" | Slot date |
-| `start_time` | "09:00" | Slot start (HH:MM) |
-| `focus_score` | 0.85 | User focus level (0-1) |
-| `is_busy` | 0 | Already booked? (0/1) |
-| `is_conflict` | 0 | Conflicts with meetings? (0/1) |
-| `meeting_count_that_day` | 2 | Meetings on that day |
-| `label` | 1 | Good slot? (0/1) - **TARGET** |
-
-**How it's used:**
-- Training target: `label` (good/bad slot)
-- Base features for ML model
-- Ranking slots at runtime
-
-### 3. `dataset/user_profiles.json`
-
-**Purpose:** Per-user preferences & behavior
-
-**Example structure:**
 ```json
 {
-  "1": {
-    "name": "Alice Johnson",
-    "email": "alice@company.com",
-    "preferred_time_center": "morning",
-    "dnd_start": "18:00",
-    "dnd_end": "09:00",
-    "avg_meetings_per_day": 2.5,
-    "preferred_duration": 30
-  }
+  "events": [
+    {
+      "eventId": 101,
+      "userId": 1,
+      "date": "2024-04-22",
+      "startTime": "10:00",
+      "endTime": "11:00",
+      "meetingType": "team_sync",
+      "durationMinutes": 60,
+      "isConflict": false
+    }
+  ]
 }
 ```
 
-| Field | Example | Usage |
-|-------|---------|-------|
-| `preferred_time_center` | "morning" (9-11 AM) or "afternoon" (2-4 PM) | User's preferred time window |
-| `dnd_start`, `dnd_end` | "18:00", "09:00" | Do-not-disturb window (start time to end time) |
-| `avg_meetings_per_day` | 2.5 | User's baseline meeting load |
-| `preferred_duration` | 30 | Typical meeting length (minutes) |
+### `POST /api/schedule`
 
-**How it's used:**
-- Personalize scoring (prefer morning/afternoon)
-- Avoid DND windows
-- Factor meeting load into recommendations
-- Adjust for user's meeting frequency
+Main scheduling endpoint. Parses intent, runs ML ranking, returns recommendations.
 
----
-
-## 🤖 ML Model Details
-
-### Model Type
-
-**Logistic Regression** (binary classifier)
-
-**Why Logistic Regression?**
-- ✅ Transparent (easy to explain in presentations)
-- ✅ Fast inference (no server needed)
-- ✅ Produces probability score (0-1) for ranking
-- ✅ Handles tabular data well
-- ✅ Can export as JSON weights
-
-### Base Features (6)
-
-Directly from `time_slots.csv`:
-
-1. `focus_score` - User's focus level during slot (0-1)
-2. `is_busy` - Currently busy? (0/1)
-3. `is_conflict` - Conflicts with meetings? (0/1)
-4. `meeting_count_that_day` - Daily meeting count (int)
-5. `hour` - Hour of day (0-23)
-6. `day_of_week` - Day name (Monday=0, Sunday=6)
-
-### Augmented Features (8)
-
-Generated during training & runtime:
-
-1. **`runway_blocks`** - Consecutive free 30-min blocks from slot start
-2. **`request_blocks`** - Duration converted to 30-min blocks
-3. **`duration_fit`** - Can fit requested duration? (0/1)
-4. **`runway_margin`** - Free time beyond requested duration
-5. **`duration_gap`** - Difference from user's preferred duration
-6. **`urgency_level`** - Encoded urgency (1-5)
-7. **`focus_x_urgency`** - Interaction (focus matters more for urgent)
-8. **`meeting_load_gap`** - Daily load vs user's average
-9. **`meeting_load_ratio`** - Normalized load (0-1)
-10. **`hour_distance_from_preference`** - Distance from preferred time
-11. **`dnd_overlap`** - In do-not-disturb window? (0/1)
-12. **`hour_sin`, `hour_cos`** - Cyclical encoding of hour (sine/cosine)
-13. **`dow_sin`, `dow_cos`** - Cyclical encoding of day-of-week
-
-### Training Process
-
-```bash
-# Generate training data
-python frontend/scripts/train_model.py
-
-# Steps:
-# 1. Load time_slots.csv → base features
-# 2. Load user_profiles.json → personalization
-# 3. Augment features → engineer derived columns
-# 4. Train logistic regression on all features
-# 5. Evaluate: accuracy, precision, recall
-# 6. Export weights → frontend/lib/model-artifact.json
-```
-
-### Training Metrics
-
-```
-Training Examples: 1,920 (synthetic slots)
-Features: 14 (base + augmented)
-Model: LogisticRegression(max_iter=1000)
-
-Results:
-├─ Accuracy:  90.16%  ✅
-├─ Precision: 69.97%  ✅
-├─ Recall:   100.00%  ✅
-└─ Positive Rate: 22.93%
-```
-
-### Runtime Scoring
-
-At request time:
-
-```
-User Request: "Schedule 30-min call"
-    ↓
-Extract Intent: { duration: 30, urgency: "normal" }
-    ↓
-For each available slot:
-    1. Load base features from time_slots.csv
-    2. Calculate augmented features (runtime)
-    3. Use model weights (from artifact) → score (0-1)
-    ↓
-Sort by score descending
-    ↓
-Return top 3 + alternatives
-```
-
----
-
-## 🔄 Development Workflow
-
-### Making Changes
-
-#### 1. Modify the Dataset
-
-Edit CSV files and regenerate:
-
-```bash
-cd dataset
-python generate_dataset.py  # Creates new data
-
-# Or manually edit:
-vim dataset/calendar_events.csv
-vim dataset/time_slots.csv
-```
-
-**⚠️ Important:** Re-train the model after changing data!
-
-#### 2. Retrain the ML Model
-
-```bash
-cd frontend
-npm run train:model
-```
-
-This regenerates `frontend/lib/model-artifact.json` with new weights.
-
-#### 3. Modify Intent Parsing Logic
-
-Edit: `frontend/lib/server/intent.ts`
-
-```typescript
-// Add custom parsing rules
-export async function parseIntent(prompt: string): Promise<Intent> {
-  // Your logic here
+**Request:**
+```json
+{
+  "userId": 1,
+  "prompt": "Schedule a 1-hour team sync this Friday afternoon"
 }
 ```
 
-Restart dev server:
-```bash
-npm run dev
-```
-
-#### 4. Modify Scheduling Logic
-
-Edit: `frontend/lib/server/scheduler.ts`
-
-```typescript
-// Change ML scoring, conflict resolution, etc.
-export async function generateSchedule(userId: number, intent: Intent) {
-  // Your logic here
+**Response:**
+```json
+{
+  "user": { ... },
+  "intent": {
+    "action": "schedule_meeting",
+    "durationMinutes": 60,
+    "urgency": "normal",
+    "timePreference": "afternoon",
+    "datePreference": "this_friday",
+    "llmUsed": true,
+    "requiresConflictResolution": false,
+    "hardConstraints": [],
+    "participants": []
+  },
+  "events": [ ... ],
+  "recommendations": [
+    {
+      "slotKey": "2024-04-26|14:00|15:00",
+      "date": "2024-04-26",
+      "startTime": "14:00",
+      "endTime": "15:00",
+      "score": 0.87,
+      "scoreLabel": "Excellent fit",
+      "participantAvailability": 1.0,
+      "focusAverage": 0.82,
+      "explanation": ["High focus window", "No adjacent meetings"],
+      "supportingSignals": ["preferred time", "low meeting load"]
+    }
+  ],
+  "conflictOptions": [],
+  "modelMetrics": {
+    "accuracy": 0.9016,
+    "precision": 0.6997,
+    "recall": 1.0,
+    "positiveRate": 0.2293
+  },
+  "notes": ["Gemini parsed intent", "3 slots ranked"]
 }
 ```
 
-Restart dev server for changes to take effect.
-
 ---
 
-## 🧪 Testing
+## ML Model
 
-### Unit Tests (Coming Soon)
+### Features (19 total)
 
-```bash
-npm run test
-```
+The model scores each 30-minute candidate slot using these features:
 
-### Manual Testing Checklist
+| Feature | Description |
+|---------|-------------|
+| `is_busy` | Slot already has a meeting |
+| `is_conflict` | Slot overlaps with existing event |
+| `runway_blocks` | Consecutive free blocks from slot start |
+| `duration_fit` | Requested duration fits in free runway |
+| `runway_margin` | Extra free time beyond requested duration |
+| `meeting_count_that_day` | Total meetings on that day |
+| `meeting_load_gap` | Meetings vs user's daily average |
+| `meeting_load_ratio` | Normalized daily load (0–1) |
+| `focus_score` | User focus level at this time |
+| `focus_x_urgency` | Focus × urgency interaction term |
+| `hour_distance_from_preference` | Distance from user's preferred time |
+| `hour_sin`, `hour_cos` | Cyclical hour encoding |
+| `duration_gap` | Difference from user's preferred duration |
+| `urgency_level` | Encoded urgency (1–5) |
+| `request_blocks` | Requested duration in 30-min blocks |
+| `dnd_overlap` | Slot falls in do-not-disturb window |
+| `dow_sin`, `dow_cos` | Cyclical day-of-week encoding |
 
-- [ ] User login works
-- [ ] Chat accepts input
-- [ ] Intent parsing extracts duration correctly
-- [ ] ML ranking returns top 3 slots
-- [ ] Slots sorted by score (highest first)
-- [ ] Conflict detection identifies overlaps
-- [ ] Confirmation modal appears
-- [ ] Alternative options display correctly
-- [ ] Calendar view shows all events
-
-### Test Prompts
-
-Use these in the chat to verify functionality:
-
-```
-1. "Schedule a 1-hour team sync this week"
-   → Should extract: duration=60, urgency=normal
-
-2. "Find the best time for a client call, avoid my low-focus hours"
-   → Should filter: is_conflict=0, focus_score > threshold
-
-3. "I have two overlapping meetings tomorrow - which one should move?"
-   → Should detect conflicts and recommend reschedule
-
-4. "Can we do a quick 15-minute sync in the next 2 hours?"
-   → Should extract: duration=15, urgency=high
-```
-
----
-
-## 📦 Building for Production
-
-### Frontend (Next.js)
+### Training
 
 ```bash
 cd frontend
-
-# Build optimized bundle
-npm run build
-
-# Test production build locally
-npm run start
-
-# Deploy to Vercel (recommended):
-vercel deploy
+npm run train:model
 ```
 
-### Mobile (React Native)
+- Reads `../dataset/time_slots.csv` (base features + `label` column)
+- Reads `../dataset/user_profiles.json` (personalization)
+- Engineers all 19 features
+- Trains logistic regression (`max_iter=1000`)
+- Exports weights, bias, and normalization params to `lib/model-artifact.json`
 
-```bash
-cd mobile
+### Runtime inference
 
-# Build APK for Android
-expo build:android
+At request time, `lib/server/runtime-model.ts` loads `model-artifact.json`, normalizes the 19 features using the saved means/stds, applies the sigmoid of the dot product, and returns a score between 0 and 1 for each slot.
 
-# Build IPA for iOS
-expo build:ios
+---
+
+## Workflow Diagram
+
+```
+                 ┌──────────────────────────────────────────┐
+                 │           User sends a message            │
+                 │  "Schedule 30-min sync tomorrow morning"  │
+                 └──────────────────┬───────────────────────┘
+                                    │
+                        ┌───────────▼────────────┐
+                        │     Intent Parser       │
+                        │  1. Try Gemini 2.5 Flash│
+                        │  2. Fallback: regex     │
+                        └───────────┬────────────┘
+                                    │ ParsedIntent object
+                        ┌───────────▼────────────┐
+                        │    Data Loader          │
+                        │  Load calendar events   │
+                        │  Load user profile      │
+                        │  Generate candidate     │
+                        │  slots (30-min grid)    │
+                        └───────────┬────────────┘
+                                    │ slots[] + user context
+                        ┌───────────▼────────────┐
+                        │   Feature Builder       │
+                        │  Engineer 19 features   │
+                        │  per candidate slot     │
+                        └───────────┬────────────┘
+                                    │ feature matrix
+                        ┌───────────▼────────────┐
+                        │   ML Ranker             │
+                        │  Load model-artifact    │
+                        │  Normalize features     │
+                        │  Sigmoid(W·x + b)       │
+                        │  Sort by score ↓        │
+                        └───────────┬────────────┘
+                                    │ top 3-5 recommendations
+                        ┌───────────▼────────────┐
+                        │   Conflict Detector     │
+                        │  Find overlapping slots │
+                        │  Score each by priority │
+                        └───────────┬────────────┘
+                                    │ recommendations + conflicts
+                        ┌───────────▼────────────┐
+                        │   UI: Show results      │
+                        │  Score, label, signals  │
+                        │  Explanation bullets    │
+                        │  Wait for confirmation  │
+                        └───────────┬────────────┘
+                                    │ user clicks Confirm
+                        ┌───────────▼────────────┐
+                        │   Meeting confirmed     │
+                        │  (no calendar mutation  │
+                        │   — human-in-the-loop)  │
+                        └────────────────────────┘
 ```
 
 ---
 
-## 🐛 Troubleshooting
+## Test Prompts
 
-### Issue: "ModuleNotFoundError: No module named 'scikit-learn'"
+Use these in the chat to test the full pipeline:
 
-**Solution:**
-```bash
-pip install scikit-learn pandas numpy
-npm run train:model
+```
+# Basic scheduling
+"Schedule a 30-minute team sync tomorrow morning"
+"Book a 1-hour review meeting this Friday afternoon"
+"Find time for a quick 15-minute check-in today"
+
+# With urgency
+"I urgently need a 45-minute call today"
+"Can we do a high-priority sync in the next 2 hours?"
+
+# Conflict resolution
+"I have two meetings that overlap — which one should I move?"
+"Resolve my scheduling conflict for tomorrow"
+
+# Non-scheduling (should reply with hint, not call API)
+"hi"
+"what can you do?"
 ```
 
-### Issue: "model-artifact.json not found"
+---
 
-**Solution:**
+## Troubleshooting
+
+### Web: `model-artifact.json` not found
+
 ```bash
 cd frontend
-
-# Check if file exists
-ls lib/model-artifact.json
-
-# If missing, retrain:
 npm run train:model
 ```
 
-### Issue: "Cannot find module './data'"
+### Web: Gemini not working / falls back to regex
 
-**Solution (Mobile):**
-```bash
-cd mobile
-
-# Ensure data.ts exists and imports CSV
-cat data.ts
-
-# Should have:
-import USERS_DATA from '../dataset/user_profiles.json'
+Check that `frontend/.env.local` exists and contains:
+```
+GEMINI_API_KEY=your_key_here
 ```
 
-### Issue: LLM not responding (OpenAI timeout)
+Then restart the dev server (`npm run dev`).
 
-**Solution:**
+### Android: "Could not load profiles" on physical device
+
+1. Make sure the Next.js server is running: `npm run dev` in `frontend/`
+2. Check your machine IP: run `ipconfig` (Windows) or `ifconfig` (Mac/Linux)
+3. Update `API_BASE` in `mobile/App.tsx` to match your current IP
+4. Rebuild: `cd mobile/android && .\gradlew.bat app:installDebug`
+5. Ensure phone and computer are on the **same Wi-Fi network**
+
+### Android: Metro bundler port conflict
+
 ```bash
-# Remove .env.local → Use fallback parser
-rm frontend/.env.local
+# Kill existing Metro process and restart on correct port
+cd mobile
+npx react-native start --port 8081 --reset-cache
+```
 
-# App will use deterministic parser automatically
+### Android: Build fails with Gradle error
+
+```bash
+cd mobile/android
+.\gradlew.bat clean
+.\gradlew.bat app:installDebug
+```
+
+### Python not found for model training
+
+```bash
+# Install Python packages first
+pip install numpy pandas scikit-learn
+
+# Then train
+cd frontend
+npm run train:model
+```
+
+---
+
+## Running Both Together (Full Stack)
+
+Open **3 terminals**:
+
+**Terminal 1 — Next.js backend + web:**
+```bash
+cd frontend
 npm run dev
 ```
 
-### Issue: Mobile app crashes on launch
-
-**Solution:**
+**Terminal 2 — Metro bundler (Android JS server):**
 ```bash
 cd mobile
-
-# Clear cache
-npm start -- --clear
-
-# Or rebuild Expo cache
-rm -rf node_modules .expo
-npm install
-npm start
+npx react-native start --port 8081
 ```
 
----
-
-## 📋 Commands Reference
-
-### Setup & Installation
-
+**Terminal 3 — Android build (run once, then Metro handles reloads):**
 ```bash
-# Clone repo
-git clone <repo-url>
-cd "AI Schedule"
-
-# Backend setup
-cd frontend
-npm install
-
-# Train ML model
-npm run train:model
-
-# Start dev server
-npm run dev
-
-# Run production build
-npm run build
-npm run start
+cd mobile/android
+.\gradlew.bat app:installDebug
 ```
 
-### Mobile Setup
-
-```bash
-cd mobile
-npm install
-npm start
-```
-
-### Data Generation (Optional)
-
-```bash
-cd dataset
-python generate_dataset.py
-```
-
-### Format & Lint
-
-```bash
-cd frontend
-npm run lint
-npm run format
-```
-
----
-
-## 🎯 Known Limitations
-
-1. **Synthetic Data Only**
-   - Dataset is generated, not production calendar data
-   - ML scores useful for ranking but not calibrated for production
-
-2. **No Data Persistence**
-   - Confirmed meetings logged in UI but not saved to CSV
-   - Re-run app to reset state
-
-3. **Fallback Parser Limitations**
-   - Deterministic parsing is less flexible than LLM
-   - Works for simple prompts; complex requests need real LLM
-
-4. **Abstract Participant IDs**
-   - Dataset uses "User 1..8" instead of real names
-   - UI shows user IDs, not names
-
-5. **No Invite Integration**
-   - System schedules meetings but doesn't send calendar invites
-   - Would require email/calendar API integration
-
-6. **Mobile API Not Fully Integrated**
-   - Mobile app currently uses local dataset (mobile/data.ts)
-   - API client stub in place; ready for backend integration
-   - Next phase: Connect to `/api/schedule` and `/api/users` endpoints
-
----
-
-## 📸 Demo Flow for Video Submission
-
-### Recommended 5-Minute Video Script
-
-1. **Login (15 seconds)**
-   ```
-   "Let me log in as a user from the dataset..."
-   [Click "Login as Alice Johnson"]
-   ```
-
-2. **Send Request (20 seconds)**
-   ```
-   "Now I'll type a meeting request in natural language:"
-   [Type: "Schedule a 1-hour team sync this week"]
-   [Hit Send]
-   ```
-
-3. **Show Intent Parsing (20 seconds)**
-   ```
-   "The LLM parses intent from natural language:"
-   [Highlight: duration=60, urgency=normal]
-   "The LLM is ONLY for parsing - it doesn't pick times!"
-   ```
-
-4. **Show ML Ranking (30 seconds)**
-   ```
-   "Now the trained ML model ranks available slots:"
-   [Open Recommendations panel]
-   [Point to ML scores: 0.87, 0.81, 0.76]
-   "Each slot gets a probability score based on 14 features:"
-   [Mention: focus_score, meeting_load, DND overlap, etc.]
-   ```
-
-5. **Show Alternatives (20 seconds)**
-   ```
-   "User gets the top option plus alternatives:"
-   [Show Top Recommendation + Alternative 1, 2]
-   "Why was this recommended? [Read explanation]"
-   ```
-
-6. **Confirm (15 seconds)**
-   ```
-   "Finally, human approval is required:"
-   [Click "Confirm & Schedule"]
-   "✅ Meeting scheduled!"
-   ```
-
-**Total Time:** ~2 minutes
-
-**Upload to:** Google Drive, share link in submission email
-
----
-
-## 📧 Submission Checklist
-
-- [ ] README.md (this file) - Complete with all sections
-- [ ] GitHub repository - Code pushed
-- [ ] ML model trained - `model-artifact.json` exists
-- [ ] Backend running - `npm run dev` works
-- [ ] Frontend loads - `http://localhost:3000` accessible
-- [ ] Mobile app runnable - `npm start` in mobile/ directory
-- [ ] Video uploaded - Link added to README
-- [ ] .env file - Sent to contact@flashbacklabs.com
-- [ ] All APIs working - `/api/users` and `/api/schedule` respond
-- [ ] No crashes - Test all demo prompts
-
----
-
-## 📚 Learn More
-
-- [Next.js Documentation](https://nextjs.org/docs)
-- [React Native Guide](https://reactnative.dev)
-- [scikit-learn ML Models](https://scikit-learn.org)
-- [Logistic Regression](https://developers.google.com/machine-learning/crash-course/logistic-regression)
-
----
-
-## 📝 License
-
-This project is open source for educational purposes.
-
----
-
-## 👨‍💻 Contributors
-
-Built for AI scheduling hackathon 2024.
-
-**Contact:** contact@flashbacklabs.com
-
----
-
-<div align="center">
-
-**[⬆ back to top](#-table-of-contents)**
-
-</div>
+Web UI: http://localhost:3000
+Android: app auto-launches on device after build
