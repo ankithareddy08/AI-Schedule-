@@ -27,7 +27,14 @@ interface Message {
 
 function App(): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>('login');
+  
+  // User & Auth State
   const [selectedUser, setSelectedUser] = useState<string>('');
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState(''); // NEW STATE for custom error
+
   const [messages, setMessages] = useState<Message[]>([
     { id: 1, type: 'user', text: 'Schedule a team sync for tomorrow.' },
     { id: 2, type: 'ai', text: 'Looking at your calendar and focus habits... I found optimal time slots from your dataset.' },
@@ -36,14 +43,17 @@ function App(): React.JSX.Element {
   const [showRecommendations, setShowRecommendations] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  
+  const [filteredSlots, setFilteredSlots] = useState<any[]>([]);
+
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const [showSignOut, setShowSignOut] = useState(false);
 
-  // CRITICAL FIX: Force these to be arrays no matter what happens to the import.
-  const validUsers = Array.isArray(USERS_DATA) ? USERS_DATA : [];
-  const validSlots = Array.isArray(TIME_SLOTS) ? TIME_SLOTS : [];
-  const validEvents = Array.isArray(CALENDAR_EVENTS) ? CALENDAR_EVENTS : [];
+  const safeUsers = Array.isArray(USERS_DATA) ? USERS_DATA : [];
+  const safeSlots = Array.isArray(TIME_SLOTS) ? TIME_SLOTS : [];
+  const safeEvents = Array.isArray(CALENDAR_EVENTS) ? CALENDAR_EVENTS : [];
+
+  const currentUserEvents = safeEvents.filter((ev: any) => ev.user_id === selectedUserId || ev.id === selectedUserId);
+  const currentUserSlots = safeSlots.filter((slot: any) => slot.user_id === selectedUserId || slot.id === selectedUserId);
 
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -61,8 +71,19 @@ function App(): React.JSX.Element {
     };
   }, []);
 
-  const handleLogin = (user: string) => {
-    setSelectedUser(user);
+  const handleDatasetLogin = (name: string, id: number) => {
+    setSelectedUser(name);
+    setSelectedUserId(id);
+    setScreen('chat');
+  };
+
+  const handleManualLogin = () => {
+    if (!loginEmail.trim() || !loginPassword.trim()) {
+      setLoginError('Please enter a valid email and password.');
+      return;
+    }
+    setSelectedUser(loginEmail.split('@')[0]);
+    setSelectedUserId(999);
     setScreen('chat');
   };
 
@@ -70,13 +91,50 @@ function App(): React.JSX.Element {
     setShowSignOut(false);
     setScreen('login');
     setSelectedUser('');
+    setSelectedUserId(null);
+    setLoginEmail('');
+    setLoginPassword('');
+    setMessages([
+      { id: 1, type: 'user', text: 'Schedule a team sync for tomorrow.' },
+      { id: 2, type: 'ai', text: 'Looking at your calendar and focus habits... I found optimal time slots from your dataset.' },
+    ]);
   };
 
   const handleSendMessage = () => {
     if (input.trim()) {
-      setMessages([...messages, { id: messages.length + 1, type: 'user', text: input }]);
+      const userMessage = input.trim();
+
+      // Extract duration from message (e.g., "30 min", "30 minute", "30m")
+      const durationMatch = userMessage.match(/(\d+)\s*(min|minute|m|hour|hr|h)/i);
+      const requestedDuration = durationMatch ? parseInt(durationMatch[1]) : null;
+
+      // Filter slots by requested duration if specified
+      let filtered = currentUserSlots;
+      if (requestedDuration) {
+        filtered = currentUserSlots.filter((slot: any) => {
+          const slotDuration = slot.duration || slot.duration_minutes || 30;
+          return slotDuration >= requestedDuration;
+        });
+      }
+
+      setFilteredSlots(filtered);
+
+      // Add user message
+      setMessages(prev => [
+        ...prev,
+        { id: prev.length + 1, type: 'user', text: userMessage },
+        {
+          id: prev.length + 2,
+          type: 'ai',
+          text: requestedDuration
+            ? `Finding ${requestedDuration}min slots... Analyzing your ${filtered.length} available options.`
+            : 'Analyzing your calendar and finding optimal time slots...'
+        }
+      ]);
+
       setInput('');
       Keyboard.dismiss();
+
       setTimeout(() => {
         setShowRecommendations(true);
       }, 600);
@@ -103,7 +161,11 @@ function App(): React.JSX.Element {
         <StatusBar barStyle="light-content" backgroundColor="#050505" />
         <ScrollView contentContainerStyle={styles.loginContent}>
           <View style={styles.logoBox}>
-            <Text style={styles.logoEmoji}>⚡</Text>
+            <Image
+              source={require('./assets/logo.png')}
+              style={{ width: 70, height: 70, borderRadius: 15 }}
+              resizeMode="contain"
+            />
           </View>
           <Text style={styles.appTitle}>Aura Sync</Text>
           <Text style={styles.appSubtitle}>AI-powered scheduling</Text>
@@ -115,16 +177,22 @@ function App(): React.JSX.Element {
               style={styles.loginInput}
               placeholder="Email address"
               placeholderTextColor="#666"
+              value={loginEmail}
+              onChangeText={setLoginEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
             />
             <TextInput
               style={styles.loginInput}
               placeholder="Password"
               placeholderTextColor="#666"
+              value={loginPassword}
+              onChangeText={setLoginPassword}
               secureTextEntry
             />
             <TouchableOpacity 
               style={styles.primaryGlassButton} 
-              onPress={() => handleLogin('Guest User')}
+              onPress={handleManualLogin}
             >
               <Text style={styles.primarySignInText}>Sign In</Text>
             </TouchableOpacity>
@@ -135,25 +203,42 @@ function App(): React.JSX.Element {
               <View style={styles.dividerLine} />
             </View>
 
-            {validUsers.length === 0 && (
-              <Text style={{color: '#ef4444', textAlign: 'center'}}>Dataset failing to load. Check data.ts exports.</Text>
+            {safeUsers.length === 0 && (
+              <Text style={{color: '#EF4444', textAlign: 'center', marginBottom: 10}}>Dataset not found. Manual login only.</Text>
             )}
 
-            {validUsers.map((u: any, idx: number) => (
+            {safeUsers.map((u: any, idx: number) => (
               <TouchableOpacity
                 key={u.id || idx}
                 style={styles.glassButton}
-                onPress={() => handleLogin(u.name || 'User')}
+                onPress={() => handleDatasetLogin(u.name || 'User', u.id || idx + 1)}
               >
                 <Text style={styles.signInButtonText}>Login as {u.name || 'User'}</Text>
-                <Image 
-                  source={require('./assets/arrow-right.png')} 
-                  style={{ width: 18, height: 18, tintColor: CYAN, marginLeft: 8 }} 
+                <Image
+                  source={require('./assets/arrow-right.png')}
+                  style={{ width: 18, height: 18, tintColor: CYAN, marginLeft: 8 }}
                 />
               </TouchableOpacity>
             ))}
           </View>
         </ScrollView>
+
+        {/* CUSTOM LOGIN ERROR MODAL */}
+        <Modal visible={!!loginError} transparent={true} animationType="fade">
+          <View style={styles.confirmationOverlay}>
+            <View style={styles.confirmationBox}>
+              <Text style={[styles.confirmationTitle, { color: '#ef4444' }]}>Login Failed</Text>
+              <Text style={[styles.confirmationText, { color: '#888', marginBottom: 20 }]}>{loginError}</Text>
+              <TouchableOpacity 
+                style={[styles.confirmButton, { width: '100%', borderColor: '#ef4444' }]} 
+                onPress={() => setLoginError('')}
+              >
+                <Text style={[styles.confirmButtonText, { color: '#ef4444' }]}>Dismiss</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
       </SafeAreaView>
     );
   }
@@ -169,7 +254,7 @@ function App(): React.JSX.Element {
           <View style={styles.chatHeader}>
             <Text style={styles.chatHeaderTitle}>Aura Sync</Text>
             <TouchableOpacity style={styles.userBadge} onPress={() => setShowSignOut(true)}>
-              <Text style={styles.userInitial}>{selectedUser ? selectedUser.charAt(0) : 'U'}</Text>
+              <Text style={styles.userInitial}>{selectedUser ? selectedUser.charAt(0).toUpperCase() : 'U'}</Text>
             </TouchableOpacity>
           </View>
 
@@ -213,16 +298,19 @@ function App(): React.JSX.Element {
                 <Text style={styles.modalTitle}>Top Recommendations</Text>
                 
                 <ScrollView contentContainerStyle={styles.slotsListContent}>
-                  {validSlots.map((slot: any, index: number) => {
+                  {currentUserSlots.length === 0 && (
+                    <Text style={{color: '#888', textAlign: 'center', marginTop: 20}}>No ML recommendations found in dataset for this user.</Text>
+                  )}
+                  {currentUserSlots.map((slot: any, index: number) => {
                     const isTopChoice = index === 0 || slot.isTop;
                     return (
                       <TouchableOpacity key={slot.id || slot.slot_id || index} style={[styles.slotCard, isTopChoice && styles.topSlotCard]} onPress={() => handleSelectSlot(slot)}>
                         <View style={styles.scoreContainer}>
-                          <Text style={styles.scoreText}>⭐ {(slot.score * 100 || slot.score || 90)}% ML Match</Text>
+                          <Text style={styles.scoreText}>⭐ {(slot.score || 90)}% ML Match</Text>
                         </View>
                         <Text style={styles.slotTime}>{slot.time || slot.start_time}</Text>
                         <Text style={styles.slotDescription}>{slot.description || 'Optimal slot based on your focus history.'}</Text>
-                        <View style={[styles.slotButton, isTopChoice && styles.confirmButton]}>
+                        <View style={[styles.slotButton, isTopChoice && styles.confirmButtonHighlight]}>
                           <Text style={[styles.slotButtonText, isTopChoice && styles.confirmButtonText]}>
                             {isTopChoice ? 'Confirm & Schedule' : 'Select'}
                           </Text>
@@ -256,9 +344,9 @@ function App(): React.JSX.Element {
               onChangeText={setInput}
             />
             <TouchableOpacity style={styles.sendButtonBox} onPress={handleSendMessage}>
-              <Image 
-                source={require('./assets/arrow-up.png')} 
-                style={{ width: 22, height: 22, tintColor: CYAN }} 
+              <Image
+                source={require('./assets/arrow-up.png')}
+                style={{ width: 22, height: 22, tintColor: CYAN }}
               />
             </TouchableOpacity>
           </View>
@@ -267,14 +355,14 @@ function App(): React.JSX.Element {
             <View style={styles.bottomNav}>
               <TouchableOpacity style={styles.navItem} onPress={() => setScreen('chat')}>
                 <Image 
-                  source={require('./assets/message-square.png')} 
+                  source={require('./assets/message-square.png')}
                   style={[styles.navIconImg, { tintColor: screen === 'chat' ? CYAN : '#555' }]} 
                 />
                 <Text style={[styles.navLabel, { color: screen === 'chat' ? CYAN : '#555' }]}>Chat</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.navItem} onPress={() => setScreen('calendar')}>
                 <Image 
-                  source={require('./assets/calendar.png')} 
+                  source={require('./assets/calendar.png')}
                   style={[styles.navIconImg, { tintColor: screen === 'calendar' ? CYAN : '#555' }]} 
                 />
                 <Text style={[styles.navLabel, { color: screen === 'calendar' ? CYAN : '#555' }]}>Calendar</Text>
@@ -293,17 +381,17 @@ function App(): React.JSX.Element {
       <View style={styles.chatHeader}>
         <Text style={styles.chatHeaderTitle}>Aura Sync</Text>
         <TouchableOpacity style={styles.userBadge} onPress={() => setShowSignOut(true)}>
-           <Text style={styles.userInitial}>{selectedUser ? selectedUser.charAt(0) : 'U'}</Text>
+           <Text style={styles.userInitial}>{selectedUser ? selectedUser.charAt(0).toUpperCase() : 'U'}</Text>
         </TouchableOpacity>
       </View>
       <ScrollView contentContainerStyle={styles.calendarContent}>
-        <Text style={styles.sectionTitle}>Dataset Events</Text>
+        <Text style={styles.sectionTitle}>{selectedUser}'s Events</Text>
         
-        {validEvents.length === 0 && (
-           <Text style={{color: '#ef4444'}}>No Calendar Events Loaded.</Text>
+        {currentUserEvents.length === 0 && (
+           <Text style={{color: '#888', textAlign: 'center', marginTop: 40}}>No calendar events found in dataset for this user.</Text>
         )}
 
-        {validEvents.map((ev: any, index: number) => {
+        {currentUserEvents.map((ev: any, index: number) => {
           if (!ev || !ev.start_time) return null;
           
           const timeParts = ev.start_time.split(':');
@@ -322,7 +410,7 @@ function App(): React.JSX.Element {
               </View>
               <View>
                 <Text style={styles.eventName}>{safeType}</Text>
-                <Text style={styles.eventMeta}>{ev.duration || 30}m • {ev.date || 'Today'}</Text>
+                <Text style={styles.eventMeta}>{ev.duration || ev.duration_minutes || 30}m • {ev.date || 'Today'}</Text>
               </View>
             </View>
           );
@@ -348,16 +436,16 @@ function App(): React.JSX.Element {
 
       <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem} onPress={() => setScreen('chat')}>
-          <Image 
-            source={require('./assets/message-square.png')} 
-            style={[styles.navIconImg, { tintColor: screen === 'chat' ? CYAN : '#555' }]} 
+          <Image
+            source={require('./assets/message-square.png')}
+            style={[styles.navIconImg, { tintColor: screen === 'chat' ? CYAN : '#555' }]}
           />
           <Text style={[styles.navLabel, { color: screen === 'chat' ? CYAN : '#555' }]}>Chat</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => setScreen('calendar')}>
-          <Image 
-            source={require('./assets/calendar.png')} 
-            style={[styles.navIconImg, { tintColor: screen === 'calendar' ? CYAN : '#555' }]} 
+          <Image
+            source={require('./assets/calendar.png')}
+            style={[styles.navIconImg, { tintColor: screen === 'calendar' ? CYAN : '#555' }]}
           />
           <Text style={[styles.navLabel, { color: screen === 'calendar' ? CYAN : '#555' }]}>Calendar</Text>
         </TouchableOpacity>
@@ -366,7 +454,6 @@ function App(): React.JSX.Element {
   );
 }
 
-// THEME VARIABLES (Coal Black & Icy Cyan)
 const CYAN = '#22d3ee'; 
 const DARK_BG = '#050505'; 
 const CARD_BG = '#0f0f13'; 
@@ -376,28 +463,23 @@ const LIGHT_BEAM = 'rgba(255, 255, 255, 0.2)';
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: DARK_BG },
   loginContent: { padding: 40, alignItems: 'center' },
-  logoBox: { width: 80, height: 80, borderRadius: 20, backgroundColor: CARD_BG, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: CYAN, marginBottom: 20 },
-  logoEmoji: { fontSize: 40 },
+  logoBox: { width: 80, height: 80, borderRadius: 20, backgroundColor: CARD_BG, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: CYAN, marginBottom: 20, overflow: 'hidden' },
   appTitle: { fontSize: 32, fontWeight: '700', color: '#fff', marginBottom: 8 },
   appSubtitle: { fontSize: 16, color: CYAN, marginBottom: 40 },
   formCard: { backgroundColor: CARD_BG, borderRadius: 20, padding: 24, width: '100%', borderWidth: 1, borderColor: BORDER_COLOR, borderTopColor: LIGHT_BEAM, borderTopWidth: 1.5 },
   formTitle: { fontSize: 18, color: '#fff', marginBottom: 20, textAlign: 'center' },
-  
   loginInput: { backgroundColor: DARK_BG, color: '#fff', paddingHorizontal: 16, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: BORDER_COLOR, marginBottom: 12, fontSize: 15 },
-  
   primaryGlassButton: { backgroundColor: 'rgba(34, 211, 238, 0.1)', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(34, 211, 238, 0.3)', borderTopColor: CYAN, borderTopWidth: 1.5 },
   primarySignInText: { color: CYAN, fontWeight: '800', fontSize: 16 },
   glassButton: { backgroundColor: 'rgba(255, 255, 255, 0.03)', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: BORDER_COLOR, borderTopColor: LIGHT_BEAM, borderTopWidth: 1.5, marginBottom: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   signInButtonText: { color: '#ccc', fontWeight: '700', textAlign: 'center', fontSize: 16 },
-  
   divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: BORDER_COLOR },
   dividerText: { color: '#666', marginHorizontal: 10, fontSize: 12, fontWeight: 'bold' },
-  
   chatHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: BORDER_COLOR },
   chatHeaderTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
   userBadge: { width: 36, height: 36, borderRadius: 18, backgroundColor: CARD_BG, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: CYAN },
-  userInitial: { color: CYAN, fontWeight: '700' },
+  userInitial: { color: CYAN, fontWeight: '700', fontSize: 16 },
   messagesList: { padding: 16 },
   messageLine: { marginVertical: 8, flexDirection: 'row', alignItems: 'flex-end' },
   userLine: { justifyContent: 'flex-end' },
@@ -418,17 +500,18 @@ const styles = StyleSheet.create({
   slotCard: { backgroundColor: CARD_BG, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: BORDER_COLOR, borderTopColor: LIGHT_BEAM, borderTopWidth: 1.5 },
   topSlotCard: { borderTopColor: CYAN, borderTopWidth: 2, backgroundColor: '#111116' },
   scoreContainer: { marginBottom: 8 },
-  scoreText: { color: CYAN, fontWeight: '700', fontSize: 12 },
+  scoreText: { color: CYAN, fontWeight: '700', fontSize: 13 },
   slotTime: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 4 },
   slotDescription: { fontSize: 14, color: '#888', marginBottom: 16 },
   slotButton: { backgroundColor: '#1a1a20', borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER_COLOR },
-  confirmButton: { backgroundColor: '#15151a', borderRadius: 10, paddingVertical: 14, alignItems: 'center', borderTopColor: CYAN, borderTopWidth: 1.5, borderColor: BORDER_COLOR, borderWidth: 1 },
+  confirmButtonHighlight: { backgroundColor: '#15151a', borderTopColor: CYAN, borderTopWidth: 1.5 },
   slotButtonText: { color: '#fff', fontWeight: '600' },
-  confirmButtonText: { color: CYAN, fontWeight: '700', fontSize: 16 },
+  confirmButtonText: { color: CYAN },
   confirmationOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   confirmationBox: { backgroundColor: CARD_BG, padding: 30, borderRadius: 20, borderWidth: 1, borderColor: BORDER_COLOR, borderTopColor: LIGHT_BEAM, borderTopWidth: 1.5, alignItems: 'center', width: '100%' },
   confirmationTitle: { fontSize: 22, color: '#fff', fontWeight: 'bold', marginBottom: 10 },
-  confirmationText: { color: CYAN, fontSize: 18, marginBottom: 20, textAlign: 'center' },
+  confirmationText: { color: CYAN, fontSize: 18, fontWeight: '600', marginBottom: 20, textAlign: 'center' },
+  confirmButton: { borderRadius: 10, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: BORDER_COLOR },
   inputBoxContainer: { flexDirection: 'row', padding: 16, borderTopWidth: 1, borderTopColor: BORDER_COLOR, backgroundColor: DARK_BG },
   inputBox: { flex: 1, backgroundColor: CARD_BG, color: '#fff', paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderColor: BORDER_COLOR },
   sendButtonBox: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#15151a', justifyContent: 'center', alignItems: 'center', marginLeft: 10, borderWidth: 1, borderColor: BORDER_COLOR, borderTopColor: CYAN, borderTopWidth: 1.5 },
@@ -437,12 +520,12 @@ const styles = StyleSheet.create({
   navIconImg: { width: 24, height: 24, marginBottom: 4 },
   navLabel: { fontSize: 12, fontWeight: '600' },
   calendarContent: { padding: 20 },
-  sectionTitle: { fontSize: 16, color: '#888', marginBottom: 16, textTransform: 'uppercase', letterSpacing: 1 },
-  eventCard: { backgroundColor: CARD_BG, borderRadius: 16, padding: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: BORDER_COLOR, borderLeftWidth: 3, borderLeftColor: CYAN },
-  eventTimeSection: { marginRight: 16, alignItems: 'center' },
+  sectionTitle: { fontSize: 14, color: '#888', fontWeight: '700', marginBottom: 16, textTransform: 'uppercase', letterSpacing: 1 },
+  eventCard: { backgroundColor: CARD_BG, borderRadius: 16, padding: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: BORDER_COLOR, borderLeftWidth: 4, borderLeftColor: CYAN },
+  eventTimeSection: { marginRight: 16, alignItems: 'center', width: 50 },
   eventTime: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
-  eventAMPM: { fontSize: 12, color: CYAN },
-  eventName: { fontSize: 16, color: '#fff', fontWeight: '600' },
+  eventAMPM: { fontSize: 12, color: CYAN, fontWeight: '600' },
+  eventName: { fontSize: 16, color: '#fff', fontWeight: '700' },
   eventMeta: { color: '#666', fontSize: 13, marginTop: 4 }
 });
 
