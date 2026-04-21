@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { BrainCircuit, CalendarRange, ShieldCheck } from "lucide-react"
 
 import type { UserProfile } from "@/lib/types"
@@ -17,8 +18,19 @@ export function LoginScreen({ users, isLoading, onSelectUser }: LoginScreenProps
       <div className="mx-auto max-w-6xl">
         <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-8 shadow-2xl shadow-fuchsia-950/20 backdrop-blur-xl">
-            <div className="mb-8 inline-flex rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.22em] text-cyan-200">
-              AI Schedule
+            <div className="mb-6 flex items-center gap-3">
+              <Image
+                src="/apple-icon.png"
+                alt="Aura Sync Logo"
+                width={48}
+                height={48}
+                className="rounded-lg"
+              />
+              <div>
+                <div className="inline-flex rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.22em] text-cyan-200">
+                  AI Schedule
+                </div>
+              </div>
             </div>
             <h1 className="max-w-xl text-4xl font-semibold leading-tight text-white sm:text-5xl">
               LLM intent parsing, ML slot ranking, and human confirmation in one scheduler.
