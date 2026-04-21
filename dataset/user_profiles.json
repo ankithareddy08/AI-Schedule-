@@ -1,0 +1,106 @@
+[
+  {
+    "user_id": 1,
+    "preferred_time": "neutral",
+    "avg_meetings_per_day": 5.0,
+    "preferred_duration": 30,
+    "do_not_disturb_start": null,
+    "do_not_disturb_end": "13:30",
+    "preferred_meeting_types": [
+      "focus_block",
+      "client_call",
+      "interview"
+    ]
+  },
+  {
+    "user_id": 2,
+    "preferred_time": "morning",
+    "avg_meetings_per_day": 4.3,
+    "preferred_duration": 30,
+    "do_not_disturb_start": null,
+    "do_not_disturb_end": null,
+    "preferred_meeting_types": [
+      "interview",
+      "team_sync",
+      "brainstorm"
+    ]
+  },
+  {
+    "user_id": 3,
+    "preferred_time": "morning",
+    "avg_meetings_per_day": 3.7,
+    "preferred_duration": 60,
+    "do_not_disturb_start": "12:30",
+    "do_not_disturb_end": "13:30",
+    "preferred_meeting_types": [
+      "focus_block",
+      "team_sync",
+      "interview"
+    ]
+  },
+  {
+    "user_id": 4,
+    "preferred_time": "neutral",
+    "avg_meetings_per_day": 3.8,
+    "preferred_duration": 60,
+    "do_not_disturb_start": "12:30",
+    "do_not_disturb_end": "13:30",
+    "preferred_meeting_types": [
+      "team_sync",
+      "client_call",
+      "brainstorm"
+    ]
+  },
+  {
+    "user_id": 5,
+    "preferred_time": "afternoon",
+    "avg_meetings_per_day": 5.4,
+    "preferred_duration": 30,
+    "do_not_disturb_start": "12:30",
+    "do_not_disturb_end": null,
+    "preferred_meeting_types": [
+      "focus_block",
+      "client_call",
+      "brainstorm"
+    ]
+  },
+  {
+    "user_id": 6,
+    "preferred_time": "morning",
+    "avg_meetings_per_day": 5.5,
+    "preferred_duration": 60,
+    "do_not_disturb_start": "12:30",
+    "do_not_disturb_end": null,
+    "preferred_meeting_types": [
+      "team_sync",
+      "1:1",
+      "brainstorm"
+    ]
+  },
+  {
+    "user_id": 7,
+    "preferred_time": "morning",
+    "avg_meetings_per_day": 3.2,
+    "preferred_duration": 60,
+    "do_not_disturb_start": "12:30",
+    "do_not_disturb_end": "13:30",
+    "preferred_meeting_types": [
+      "interview",
+      "team_sync",
+      "brainstorm"
+    ]
+  },
+  {
+    "user_id": 8,
+    "preferred_time": "morning",
+    "avg_meetings_per_day": 3.4,
+    "preferred_duration": 30,
+    "do_not_disturb_start": null,
+    "do_not_disturb_end": "13:30",
+    "preferred_meeting_types": [
+      "focus_block",
+      "team_sync",
+      "brainstorm"
+    ]
+  }
+]
