@@ -18,7 +18,7 @@ export function LoginScreen({ users, isLoading, onSelectUser }: LoginScreenProps
       <div
         style={{
           position: 'relative',
-          width: 88, height: 88, borderRadius: '50%',
+          width: 96, height: 96, borderRadius: 22,
           border: '2px solid #22d3ee',
           overflow: 'hidden', marginBottom: 20,
           flexShrink: 0,

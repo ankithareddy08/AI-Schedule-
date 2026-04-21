@@ -4,7 +4,16 @@ import path from "node:path"
 import type { CalendarEvent, TimeSlotRecord, UserProfile } from "@/lib/types"
 
 
-const DATASET_DIR = path.resolve(process.cwd(), "..", "dataset")
+const DATASET_DIR = (() => {
+  const inFrontend = path.resolve(process.cwd(), "data")
+  const legacy = path.resolve(process.cwd(), "..", "dataset")
+  try {
+    require("fs").accessSync(inFrontend)
+    return inFrontend
+  } catch {
+    return legacy
+  }
+})()
 
 let cache:
   | {
