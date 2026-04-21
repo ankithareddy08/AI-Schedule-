@@ -1,7 +1,5 @@
 "use client"
 
-import { Loader2, Send, Sparkles } from "lucide-react"
-
 import type { ScheduleResponse } from "@/lib/types"
 
 
@@ -22,12 +20,11 @@ interface ChatScreenProps {
 }
 
 function intentSummary(result: ScheduleResponse) {
-  const participants = result.intent.participants.join(", ")
   return [
-    `Duration ${result.intent.durationMinutes} min`,
-    `Urgency ${result.intent.urgency}`,
-    `Participants ${participants}`,
-    `Constraint count ${result.intent.hardConstraints.length}`,
+    `${result.intent.durationMinutes} min`,
+    `Urgency: ${result.intent.urgency}`,
+    `Participants: ${result.intent.participants.join(", ")}`,
+    `${result.intent.hardConstraints.length} constraint${result.intent.hardConstraints.length !== 1 ? 's' : ''}`,
   ]
 }
 
@@ -41,86 +38,112 @@ export function ChatScreen({
   onShowRecommendations,
 }: ChatScreenProps) {
   return (
-    <div className="flex h-full flex-col rounded-[2rem] border border-white/10 bg-black/35 backdrop-blur-xl">
-      <div className="border-b border-white/10 px-5 py-4">
-        <p className="text-xs font-medium uppercase tracking-[0.24em] text-slate-400">Chat input</p>
-        <h2 className="mt-2 text-xl font-semibold text-white">Ask the scheduler in natural language</h2>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', minHeight: 0 }} className="m-card">
+      {/* Header */}
+      <div className="m-header">
+        <div>
+          <p className="m-label">Chat input</p>
+          <p style={{ color: '#fff', fontWeight: 700, fontSize: 20, marginTop: 6 }}>Ask the scheduler</p>
+        </div>
       </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
+      {/* Messages */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {messages.map((message) => (
-          <div key={message.id} className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
-            {message.type === "assistant" ? (
-              <div className="mr-3 mt-1 flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-fuchsia-500 via-violet-500 to-cyan-400 shadow-lg shadow-fuchsia-900/30">
-                <Sparkles className="h-4 w-4 text-white" />
-              </div>
-            ) : null}
+          <div
+            key={message.id}
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'flex-end',
+              justifyContent: message.type === 'user' ? 'flex-end' : 'flex-start',
+              gap: 8,
+            }}
+          >
+            {message.type === 'assistant' && (
+              <span style={{ fontSize: 20, marginBottom: 4 }}>⚡</span>
+            )}
             <div
-                className={`max-w-[86%] rounded-3xl px-4 py-3 text-sm leading-7 ${
-                  message.type === "user"
-                    ? "bg-gradient-to-r from-fuchsia-500 via-violet-500 to-cyan-500 text-white"
-                    : "border border-white/10 bg-white/[0.06] text-slate-100"
-                }`}
-              >
+              className={message.type === 'user' ? 'm-bubble-user' : 'm-bubble-ai'}
+              style={{ maxWidth: '80%' }}
+            >
               {message.text}
             </div>
           </div>
         ))}
 
-        {result ? (
-          <div className="rounded-3xl border border-cyan-400/20 bg-cyan-400/8 p-4">
-            <div className="flex items-start justify-between gap-4">
+        {/* Intent extraction card */}
+        {result && (
+          <div style={{
+            background: 'rgba(34,211,238,0.06)',
+            border: '1px solid rgba(34,211,238,0.2)',
+            borderRadius: '1rem',
+            padding: '1rem',
+            marginTop: 4,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <div>
-                <p className="text-xs font-medium uppercase tracking-[0.22em] text-cyan-200">Intent extraction</p>
-                <p className="mt-2 text-sm text-white">
-                  {result.intent.llmUsed ? "LLM parser active" : "Fallback parser active"} · action {result.intent.action.replace("_", " ")}
+                <p className="m-label" style={{ color: '#22d3ee', marginBottom: 4 }}>Intent extraction</p>
+                <p style={{ color: '#fff', fontSize: 14 }}>
+                  {result.intent.llmUsed ? '🤖 Gemini parsed' : '📋 Auto parsed'} · {result.intent.action.replace('_', ' ')}
                 </p>
               </div>
               <button
                 onClick={onShowRecommendations}
-                className="rounded-2xl border border-cyan-300/30 bg-white/10 px-3 py-2 text-xs font-medium text-cyan-100 transition hover:bg-white/15"
+                style={{
+                  background: 'rgba(34,211,238,0.1)',
+                  border: '1px solid rgba(34,211,238,0.3)',
+                  borderRadius: '0.625rem',
+                  color: '#22d3ee',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: '6px 12px',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
               >
-                View ranked slots
+                View ranked slots ↓
               </button>
             </div>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {intentSummary(result).map((item) => (
-                <div key={item} className="rounded-2xl border border-white/10 bg-slate-950/55 px-3 py-2 text-sm text-slate-200">
+                <div key={item} className="m-card" style={{ padding: '8px 12px', fontSize: 13, color: '#ccc' }}>
                   {item}
                 </div>
               ))}
             </div>
           </div>
-        ) : null}
+        )}
       </div>
 
-      <div className="border-t border-white/10 px-5 py-4">
-        <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.06] p-2">
-          <textarea
-            value={input}
-            onChange={(event) => onInputChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault()
-                onSend()
-              }
-            }}
-            placeholder='Try "Schedule a 1-hour team sync this week" or "I have two overlapping meetings tomorrow - which one should move?"'
-            className="min-h-[112px] w-full resize-none bg-transparent px-3 py-3 text-sm leading-7 text-white outline-none placeholder:text-slate-500"
-          />
-          <div className="flex items-center justify-between px-2 pb-1">
-            <p className="text-xs text-slate-500">LLM parses intent only. ML decides the slot ranking.</p>
-            <button
-              onClick={onSend}
-              disabled={isLoading || !input.trim()}
-              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-fuchsia-500 via-violet-500 to-cyan-500 px-4 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Run scheduler
-            </button>
-          </div>
-        </div>
+      {/* Input area */}
+      <div style={{
+        borderTop: '1px solid rgba(255,255,255,0.05)',
+        padding: '16px',
+        display: 'flex',
+        gap: 10,
+        alignItems: 'center',
+        background: '#050505',
+      }}>
+        <input
+          className="m-input"
+          placeholder='e.g. "Schedule a 1-hour team sync this week"'
+          value={input}
+          onChange={(e) => onInputChange(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); } }}
+          disabled={isLoading}
+        />
+        <button className="m-send-btn" onClick={onSend} disabled={isLoading || !input.trim()}>
+          {isLoading
+            ? <div style={{ width: 18, height: 18, border: '2px solid #22d3ee', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+            : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 19V5M5 12l7-7 7 7" />
+              </svg>
+          }
+        </button>
       </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }

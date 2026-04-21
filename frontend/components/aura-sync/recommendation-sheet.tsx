@@ -1,7 +1,5 @@
 "use client"
 
-import { CheckCircle2, Sparkles, X } from "lucide-react"
-
 import type { RecommendationOption, ScheduleResponse } from "@/lib/types"
 
 
@@ -13,6 +11,25 @@ interface RecommendationSheetProps {
   onConfirm: (option: RecommendationOption) => void
 }
 
+function fmtDate(d: string) {
+  try {
+    return new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" })
+      .format(new Date(`${d}T00:00:00`))
+  } catch { return d }
+}
+
+function fmtTime(t: string) {
+  if (!t) return ''
+  const h = parseInt(t.split(':')[0] ?? '0', 10)
+  const m = t.split(':')[1] ?? '00'
+  const hour = h > 12 ? h - 12 : h === 0 ? 12 : h
+  return `${hour}:${m}`
+}
+
+function fmtAMPM(t: string) {
+  return parseInt(t.split(':')[0] ?? '0', 10) >= 12 ? 'PM' : 'AM'
+}
+
 export function RecommendationSheet({
   isOpen,
   result,
@@ -20,97 +37,171 @@ export function RecommendationSheet({
   onClose,
   onConfirm,
 }: RecommendationSheetProps) {
-  if (!isOpen || !result) {
-    return null
-  }
-
-  const options = result.recommendations
+  if (!isOpen || !result) return null
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-slate-950/72 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-t-[2rem] border border-white/10 bg-[#0a0d15]/94 p-5 shadow-2xl shadow-black/60 backdrop-blur-2xl">
-        <div className="mx-auto mb-5 h-1.5 w-16 rounded-full bg-white/15" />
-        <div className="mb-5 flex items-start justify-between gap-4">
+      {/* Overlay */}
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 40,
+          background: 'rgba(0,0,0,0.75)',
+          backdropFilter: 'blur(4px)',
+        }}
+      />
+
+      {/* Bottom sheet */}
+      <div style={{
+        position: 'fixed',
+        bottom: 0, left: 0, right: 0,
+        zIndex: 50,
+        maxHeight: '88vh',
+        overflowY: 'auto',
+        background: '#0a0a0c',
+        borderTop: '1.5px solid rgba(255,255,255,0.2)',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingBottom: 40,
+      }}>
+        {/* Handle bar */}
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0' }}>
+          <div style={{ width: 40, height: 4, background: '#333', borderRadius: 2 }} />
+        </div>
+
+        {/* Sheet header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0 20px 16px',
+          borderBottom: '1px solid rgba(255,255,255,0.05)',
+        }}>
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.24em] text-slate-400">Slot comparison view</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Ranked recommendations for confirmation</h2>
-            <p className="mt-2 text-sm text-slate-400">
-              No action is taken until the user confirms one of these ML-ranked options.
+            <p className="m-label">Slot comparison</p>
+            <p style={{ color: '#fff', fontWeight: 700, fontSize: 20, marginTop: 6 }}>Top Recommendations</p>
+            <p style={{ color: '#888', fontSize: 13, marginTop: 4 }}>
+              No action is taken until you confirm a slot.
             </p>
           </div>
           <button
             onClick={onClose}
-            className="rounded-2xl border border-white/10 bg-white/5 p-2 text-slate-300 transition hover:bg-white/10"
+            style={{
+              background: '#0f0f13',
+              border: '1px solid rgba(255,255,255,0.05)',
+              borderRadius: '0.625rem',
+              padding: '8px 10px',
+              color: '#666',
+              fontSize: 18,
+              cursor: 'pointer',
+              lineHeight: 1,
+            }}
           >
-            <X className="h-5 w-5" />
+            ✕
           </button>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="space-y-4">
-            {options.map((option, index) => {
-              const confirmed = confirmedSlotKey === option.slotKey
-
+        {/* Content grid */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,0.8fr)',
+          gap: 16,
+          padding: '20px',
+        }}
+          className="max-lg:grid-cols-1"
+        >
+          {/* Left — ranked slots */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {result.recommendations.map((rec, index) => {
+              const isTop = index === 0
+              const confirmed = confirmedSlotKey === rec.slotKey
               return (
-                <div
-                  key={option.slotKey}
-                  className={`rounded-[1.75rem] border p-5 ${
-                    index === 0
-                      ? "border-cyan-300/35 bg-cyan-400/10"
-                      : "border-white/10 bg-white/5"
-                  }`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-4">
+                <div key={rec.slotKey} className={isTop ? 'm-slot-top' : 'm-slot'}>
+                  {/* Badges */}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                    {isTop && (
+                      <span style={{
+                        background: 'rgba(34,211,238,0.1)',
+                        border: '1px solid rgba(34,211,238,0.3)',
+                        borderRadius: 9999,
+                        padding: '2px 10px',
+                        fontSize: 11,
+                        color: '#22d3ee',
+                        fontWeight: 600,
+                      }}>⭐ Top choice</span>
+                    )}
+                    {confirmed && (
+                      <span style={{
+                        background: 'rgba(52,211,153,0.1)',
+                        border: '1px solid rgba(52,211,153,0.3)',
+                        borderRadius: 9999,
+                        padding: '2px 10px',
+                        fontSize: 11,
+                        color: '#34d399',
+                        fontWeight: 600,
+                      }}>✓ Confirmed</span>
+                    )}
+                  </div>
+
+                  {/* Score + time */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
                     <div>
-                      <div className="flex items-center gap-2">
-                        {index === 0 ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs font-medium text-cyan-100">
-                            <Sparkles className="h-3 w-3" />
-                            Top choice
-                          </span>
-                        ) : null}
-                        {confirmed ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-100">
-                            <CheckCircle2 className="h-3 w-3" />
-                            Confirmed
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="mt-3 text-xl font-semibold text-white">
-                        {option.date} · {option.startTime} - {option.endTime}
+                      <p style={{ color: '#22d3ee', fontWeight: 700, fontSize: 13, marginBottom: 6 }}>
+                        ⭐ {Math.round(rec.score * 100)}% · {rec.scoreLabel}
                       </p>
-                      <p className="mt-1 text-sm text-slate-300">{option.scoreLabel}</p>
+                      <p style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>
+                        {fmtDate(rec.date)}
+                      </p>
+                      <p style={{ color: '#fff', fontSize: 15, marginTop: 2 }}>
+                        {fmtTime(rec.startTime)}–{fmtTime(rec.endTime)} {fmtAMPM(rec.endTime)}
+                      </p>
                     </div>
-                    <div className="rounded-[1.4rem] border border-white/10 bg-slate-950/60 px-4 py-3 text-right">
-                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">ML score</p>
-                      <p className="mt-1 text-3xl font-semibold text-white">{Math.round(option.score * 100)}</p>
+                    <div style={{
+                      background: '#050505',
+                      border: '1px solid rgba(255,255,255,0.05)',
+                      borderRadius: '0.625rem',
+                      padding: '8px 14px',
+                      textAlign: 'right',
+                      flexShrink: 0,
+                    }}>
+                      <p style={{ fontSize: 10, color: '#666', textTransform: 'uppercase', letterSpacing: '0.1em' }}>ML score</p>
+                      <p style={{ fontSize: 28, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>
+                        {Math.round(rec.score * 100)}
+                      </p>
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                    {option.explanation.map((item) => (
-                      <div key={item} className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm text-slate-200">
-                        {item}
+                  {/* Explanation */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                    {rec.explanation.map((exp) => (
+                      <div key={exp} style={{
+                        background: '#050505',
+                        border: '1px solid rgba(255,255,255,0.05)',
+                        borderRadius: '0.625rem',
+                        padding: '8px 12px',
+                        fontSize: 13,
+                        color: '#ccc',
+                        lineHeight: 1.5,
+                      }}>
+                        {exp}
                       </div>
                     ))}
                   </div>
 
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {option.supportingSignals.map((signal) => (
-                      <span key={signal} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
-                        {signal}
-                      </span>
+                  {/* Signals */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+                    {rec.supportingSignals.map((sig) => (
+                      <span key={sig} className="m-tag">{sig}</span>
                     ))}
                   </div>
 
-                  <div className="mt-5 flex items-center justify-between gap-4">
-                    <p className="text-xs text-slate-400">
-                      Participant availability {Math.round(option.participantAvailability * 100)}% · focus average {Math.round(option.focusAverage * 100)}%
+                  {/* Footer */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                    <p style={{ fontSize: 12, color: '#666' }}>
+                      Availability {Math.round(rec.participantAvailability * 100)}% · Focus {Math.round(rec.focusAverage * 100)}%
                     </p>
                     <button
-                      onClick={() => onConfirm(option)}
-                      className="rounded-2xl bg-gradient-to-r from-fuchsia-500 via-violet-500 to-cyan-500 px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+                      onClick={() => onConfirm(rec)}
+                      className="m-btn-cyan"
+                      style={{ padding: '8px 16px', fontSize: 13, whiteSpace: 'nowrap' }}
                     >
                       Confirm suggestion
                     </button>
@@ -120,34 +211,47 @@ export function RecommendationSheet({
             })}
           </div>
 
-          <div className="space-y-4">
-            <div className="rounded-[1.75rem] border border-white/10 bg-white/5 p-5">
-              <p className="text-sm font-semibold text-white">Model performance snapshot</p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-3">
-                  <p className="text-xs text-slate-500">Accuracy</p>
-                  <p className="mt-1 text-2xl font-semibold text-white">{Math.round(result.modelMetrics.accuracy * 100)}%</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-3">
-                  <p className="text-xs text-slate-500">Precision</p>
-                  <p className="mt-1 text-2xl font-semibold text-white">{Math.round(result.modelMetrics.precision * 100)}%</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-3">
-                  <p className="text-xs text-slate-500">Recall</p>
-                  <p className="mt-1 text-2xl font-semibold text-white">{Math.round(result.modelMetrics.recall * 100)}%</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-3">
-                  <p className="text-xs text-slate-500">Positive rate</p>
-                  <p className="mt-1 text-2xl font-semibold text-white">{Math.round(result.modelMetrics.positiveRate * 100)}%</p>
-                </div>
+          {/* Right — model metrics + notes */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Model metrics */}
+            <div className="m-card" style={{ padding: 20 }}>
+              <p style={{ color: '#fff', fontWeight: 700, fontSize: 15, marginBottom: 14 }}>Model performance</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {[
+                  { label: 'Accuracy', value: result.modelMetrics.accuracy },
+                  { label: 'Precision', value: result.modelMetrics.precision },
+                  { label: 'Recall', value: result.modelMetrics.recall },
+                  { label: 'Positive rate', value: result.modelMetrics.positiveRate },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{
+                    background: '#050505',
+                    border: '1px solid rgba(255,255,255,0.05)',
+                    borderRadius: '0.625rem',
+                    padding: '10px 12px',
+                  }}>
+                    <p style={{ fontSize: 11, color: '#666' }}>{label}</p>
+                    <p style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginTop: 2 }}>
+                      {Math.round(value * 100)}%
+                    </p>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div className="rounded-[1.75rem] border border-white/10 bg-white/5 p-5">
-              <p className="text-sm font-semibold text-white">System notes</p>
-              <div className="mt-4 space-y-3">
+            {/* System notes */}
+            <div className="m-card" style={{ padding: 20 }}>
+              <p style={{ color: '#fff', fontWeight: 700, fontSize: 15, marginBottom: 14 }}>System notes</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {result.notes.map((note) => (
-                  <div key={note} className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm leading-6 text-slate-200">
+                  <div key={note} style={{
+                    background: '#050505',
+                    border: '1px solid rgba(255,255,255,0.05)',
+                    borderRadius: '0.625rem',
+                    padding: '10px 12px',
+                    fontSize: 13,
+                    color: '#bbb',
+                    lineHeight: 1.6,
+                  }}>
                     {note}
                   </div>
                 ))}
