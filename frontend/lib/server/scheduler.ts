@@ -149,6 +149,7 @@ async function buildRecommendations(user: UserProfile, intent: SchedulingIntent)
   const window = getDateWindow(intent.datePreference, intent.specificDate)
   const urgencyLevel = URGENCY_LEVEL[intent.urgency]
   const recommendationsMap = new Map<string, RecommendationOption>()
+  const processedSlots = new Set<string>()
 
   for (const slot of activeUserSlots) {
     if (!isWithinDateRange(slot.date, window.start, window.end)) {
@@ -159,6 +160,11 @@ async function buildRecommendations(user: UserProfile, intent: SchedulingIntent)
     }
 
     const slotKey = `${slot.date}|${slot.startTime}`
+    if (processedSlots.has(slotKey)) {
+      continue
+    }
+    processedSlots.add(slotKey)
+
     const endTime = addMinutes(slot.startTime, intent.durationMinutes)
     const participantScores: number[] = []
     const participantFocus: number[] = []
