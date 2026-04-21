@@ -186,7 +186,11 @@ npm install
 
 **Key packages installed:**
 - `next` - React framework
-- `scikit-learn` - ML model (Python)
+- `typescript` - Type safety
+- `react` - UI library
+
+**Python packages (for ML training only):**
+- `scikit-learn` - ML model training
 - `pandas`, `numpy` - Data processing
 
 #### Step 2: Train the ML Model
@@ -532,8 +536,8 @@ flowchart LR
 
 | Field | Example | Usage |
 |-------|---------|-------|
-| `preferred_time_center` | "morning" | 9-11 AM preference |
-| `dnd_start`, `dnd_end` | "18:00", "09:00" | Do-not-disturb window |
+| `preferred_time_center` | "morning" (9-11 AM) or "afternoon" (2-4 PM) | User's preferred time window |
+| `dnd_start`, `dnd_end` | "18:00", "09:00" | Do-not-disturb window (start time to end time) |
 | `avg_meetings_per_day` | 2.5 | User's baseline meeting load |
 | `preferred_duration` | 30 | Typical meeting length (minutes) |
 
@@ -903,8 +907,9 @@ npm run format
    - Would require email/calendar API integration
 
 6. **Mobile API Not Fully Integrated**
-   - Mobile app currently uses local data
-   - API integration coming soon
+   - Mobile app currently uses local dataset (mobile/data.ts)
+   - API client stub in place; ready for backend integration
+   - Next phase: Connect to `/api/schedule` and `/api/users` endpoints
 
 ---
 
@@ -980,7 +985,7 @@ npm run format
 
 - [Next.js Documentation](https://nextjs.org/docs)
 - [React Native Guide](https://reactnative.dev)
-- [scikit-learn MLmodels](https://scikit-learn.org)
+- [scikit-learn ML Models](https://scikit-learn.org)
 - [Logistic Regression](https://developers.google.com/machine-learning/crash-course/logistic-regression)
 
 ---
